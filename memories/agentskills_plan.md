@@ -65,10 +65,15 @@ Implementation progress
     - Direct command mode fallback when target is not resolvable as allowed path and `allow_direct_commands=true`.
   - Added `${SKILL_DIR}` placeholder expansion helper reused for script target and args.
   - Added mode-aware logging (`path` vs `direct`) and fallback logging.
-
-Noted caveat after Step 4
-- Direct command mode expects command+args as argv vector (script_path + args[]).
-- A single-string shell expression (e.g. `"/bin/sh -c ls -r"` entirely in script_path) is not parsed by shell automatically; proper usage is script_path=`/bin/sh`, args=`{"-c", "ls -r"}`.
+- Step 5 completed:
+  - Added direct-command argv normalization helper.
+  - Supports legacy single-string direct command inputs such as `/bin/sh -c ls -r` by converting into argv.
+  - Preserves existing explicit args handling and placeholder expansion.
 
 Next step suggestion
-- Step 5: polish UX/error messaging and optionally normalize direct-command input heuristics (without changing security posture).
+- Step 6: run focused validation (manual cases or tests) to confirm behavior in:
+  - in-skill file load,
+  - allowlisted workspace file load,
+  - denied outside-workspace file,
+  - path script mode,
+  - direct command mode with `/bin/sh -c ...`.

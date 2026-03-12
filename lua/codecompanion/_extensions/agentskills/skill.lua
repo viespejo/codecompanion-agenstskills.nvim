@@ -190,16 +190,52 @@ function Skill:read_file(path_in_skill)
 end
 
 
+local function build_direct_command_argv(target, extra_args)
+  local argv = {}
+
+  if type(target) ~= "string" then
+    error("Invalid direct command target")
+  end
+
+  if string.find(target, "%s") then
+    local bin, shell_flag, shell_cmd = string.match(target, "^%s*(%S+)%s+(-l?c)%s+(.+)%s*$")
+    if bin and shell_flag and shell_cmd then
+      argv = { bin, shell_flag, shell_cmd }
+    else
+      argv = vim.split(target, "%s+", { trimempty = true })
+    end
+  else
+    argv = { target }
+  end
+
+  for _, arg in ipairs(extra_args or {}) do
+    table.insert(argv, arg)
+  end
+
+  return argv
+end
+
 ---@param script string
 ---@param args string[]
 ---@param callback fun(ok: boolean, output_or_error: string)
 function Skill:run_script(script, args, callback)
   local mode, target = self:_resolve_run_target(script)
-  local cmd = { target }
 
+  local expanded_args = {}
   for _, arg in ipairs(args or {}) do
-    table.insert(cmd, self:_expand_skill_dir_placeholder(arg))
+    table.insert(expanded_args, self:_expand_skill_dir_placeholder(arg))
   end
+
+  local cmd
+  if mode == "direct" then
+    cmd = build_direct_command_argv(target, expanded_args)
+  else
+    cmd = { target }
+    for _, arg in ipairs(expanded_args) do
+      table.insert(cmd, arg)
+    end
+  end
+
   log:info("Running skill script (%s mode): %s", mode, cmd)
   vim.system(cmd, {
 
@@ -230,5 +266,6 @@ function Skill:run_script(script, args, callback)
     end
   end)
 end
+
 
 return Skill
