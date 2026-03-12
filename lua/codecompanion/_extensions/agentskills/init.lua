@@ -5,12 +5,21 @@ local Extension = {}
 
 ---@class CodeCompanion.AgentSkills.Opts
 ---@field paths (string | { [1]: string, recursive: boolean })[] List of paths to search for skills
+---@field ignore_dirs table<string, boolean> Directories to ignore while scanning
+---@field external_allowlist string[] Additional resource roots allowed for AgentSkills
+---@field enforce_workspace_boundary boolean Enforce external_allowlist paths to be inside vim.uv.cwd()
+---@field allow_direct_commands boolean Allow direct command execution mode in run_skill_script
+
 
 ---@type CodeCompanion.AgentSkills.Opts
 local current_opts = {
   paths = {},
   ignore_dirs = {},
+  external_allowlist = {},
+  enforce_workspace_boundary = true,
+  allow_direct_commands = true,
 }
+
 
 ---@type table<string, CodeCompanion.AgentSkills.Skill>?
 local skills
@@ -102,6 +111,24 @@ end
 function Extension.setup(opts)
   current_opts = vim.tbl_deep_extend("force", current_opts, opts or {})
 
+  if type(current_opts.external_allowlist) ~= "table" then
+    log:warn("agentskills.external_allowlist must be a list; falling back to empty list")
+    current_opts.external_allowlist = {}
+  end
+
+  if current_opts.enforce_workspace_boundary == nil then
+    current_opts.enforce_workspace_boundary = true
+  else
+    current_opts.enforce_workspace_boundary = not not current_opts.enforce_workspace_boundary
+  end
+
+  if current_opts.allow_direct_commands == nil then
+    current_opts.allow_direct_commands = true
+  else
+    current_opts.allow_direct_commands = not not current_opts.allow_direct_commands
+  end
+
+
   -- Detect CodeCompanion version
   local ok, cc = pcall(require, "codecompanion")
   local version = 18
@@ -140,8 +167,22 @@ function Extension.setup(opts)
   }
 end
 
+---@return {
+--- external_allowlist: string[],
+--- enforce_workspace_boundary: boolean,
+--- allow_direct_commands: boolean
+---}
+function Extension.get_policy()
+  return {
+    external_allowlist = vim.deepcopy(current_opts.external_allowlist),
+    enforce_workspace_boundary = current_opts.enforce_workspace_boundary,
+    allow_direct_commands = current_opts.allow_direct_commands,
+  }
+end
+
 ---@return table<string, CodeCompanion.AgentSkills.Skill>?
 function Extension.get_skills()
+
   return skills
 end
 
@@ -155,6 +196,8 @@ Extension.exports = {
   Skill = Skill,
   discover = discover_skills,
   get_skills = Extension.get_skills,
+  get_policy = Extension.get_policy,
 }
+
 
 return Extension
