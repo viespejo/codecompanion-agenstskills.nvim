@@ -59,7 +59,16 @@ Implementation progress
     - provides access-kind aware errors/logging.
   - Applied resolver to `read_file` and path-based `run_script` entry.
   - Wired setup to propagate policy: `Skill.set_policy(Extension.get_policy())`.
+- Step 4 completed:
+  - Added run target resolution split in `Skill:run_script`:
+    - Path mode for allowed files under skill root or vetted allowlist.
+    - Direct command mode fallback when target is not resolvable as allowed path and `allow_direct_commands=true`.
+  - Added `${SKILL_DIR}` placeholder expansion helper reused for script target and args.
+  - Added mode-aware logging (`path` vs `direct`) and fallback logging.
 
-Next step (Step 4)
-- Implement run_script mode split for BMAD compatibility:
-  - path mode (current resolver) vs direct command mode (approved execution path).
+Noted caveat after Step 4
+- Direct command mode expects command+args as argv vector (script_path + args[]).
+- A single-string shell expression (e.g. `"/bin/sh -c ls -r"` entirely in script_path) is not parsed by shell automatically; proper usage is script_path=`/bin/sh`, args=`{"-c", "ls -r"}`.
+
+Next step suggestion
+- Step 5: polish UX/error messaging and optionally normalize direct-command input heuristics (without changing security posture).

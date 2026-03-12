@@ -123,6 +123,60 @@ function Skill:_normalize_path_in_skill(path_in_skill, access_kind)
   error(string.format("Attempted to access %s outside allowed roots: %s", access_kind, path_in_skill))
 end
 
+local function has_path_separator(s)
+  return type(s) == "string" and string.find(s, "/", 1, true) ~= nil
+end
+
+function Skill:_expand_skill_dir_placeholder(value)
+  if type(value) ~= "string" then
+    return value
+  end
+  local placeholder_pattern = vim.pesc(self.SKILL_DIR_PLACEHOLDER)
+  return string.gsub(value, placeholder_pattern, self.path)
+end
+
+function Skill:_resolve_run_target(script)
+  local expanded_script = self:_expand_skill_dir_placeholder(script)
+
+  -- Support script files at skill root without slash (e.g. "run.sh")
+  if not vim.startswith(expanded_script, "/") and not has_path_separator(expanded_script) then
+    local skill_local = vim.fs.normalize(vim.fs.joinpath(self.path, expanded_script))
+    if vim.uv.fs_stat(skill_local) then
+      return "path", self:_normalize_path_in_skill(expanded_script, "script")
+    end
+  end
+
+  local is_path_like = vim.startswith(expanded_script, "/") or has_path_separator(expanded_script)
+
+  if is_path_like then
+    local ok, resolved_or_err = pcall(self._normalize_path_in_skill, self, expanded_script, "script")
+    if ok then
+      if not vim.uv.fs_stat(resolved_or_err) then
+        error("Script file not found: " .. expanded_script)
+      end
+      return "path", resolved_or_err
+    end
+
+    if active_policy.allow_direct_commands then
+      log:info(
+        "Falling back to direct command mode for skill '%s': %s",
+        self:name(),
+        tostring(expanded_script)
+      )
+      return "direct", expanded_script
+    end
+
+    error(resolved_or_err)
+  end
+
+  if active_policy.allow_direct_commands then
+    return "direct", expanded_script
+  end
+
+  error("Direct command execution is disabled by AgentSkills policy: " .. tostring(expanded_script))
+end
+
+
 
 ---@return string
 function Skill:read_content()
@@ -140,15 +194,15 @@ end
 ---@param args string[]
 ---@param callback fun(ok: boolean, output_or_error: string)
 function Skill:run_script(script, args, callback)
-  local cmd = { self:_normalize_path_in_skill(script, "script") }
+  local mode, target = self:_resolve_run_target(script)
+  local cmd = { target }
 
-  local placeholder_pattern = vim.pesc(self.SKILL_DIR_PLACEHOLDER)
   for _, arg in ipairs(args or {}) do
-    arg = string.gsub(arg, placeholder_pattern, self.path)
-    table.insert(cmd, arg)
+    table.insert(cmd, self:_expand_skill_dir_placeholder(arg))
   end
-  log:info("Running skill script: %s", cmd)
+  log:info("Running skill script (%s mode): %s", mode, cmd)
   vim.system(cmd, {
+
     stdout = true,
     stderr = true,
   }, function(out)
