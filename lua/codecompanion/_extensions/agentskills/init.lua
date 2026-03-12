@@ -21,8 +21,80 @@ local current_opts = {
 }
 
 
+---@type {
+--- workspace_root: string,
+--- external_roots: string[],
+--- enforce_workspace_boundary: boolean,
+--- allow_direct_commands: boolean,
+---}
+local current_policy = {
+  workspace_root = vim.fs.normalize(vim.uv.cwd()),
+  external_roots = {},
+  enforce_workspace_boundary = true,
+  allow_direct_commands = true,
+}
+
 ---@type table<string, CodeCompanion.AgentSkills.Skill>?
 local skills
+
+local function normalize_allowlist_path(path, workspace_root)
+
+  if type(path) ~= "string" or path == "" then
+    return nil, "path must be a non-empty string"
+  end
+  local normalized = vim.fs.normalize(path)
+  if not vim.startswith(normalized, "/") then
+    normalized = vim.fs.normalize(vim.fs.joinpath(workspace_root, normalized))
+  end
+  return normalized
+end
+
+local function is_path_within_root(path, root)
+  local rel = vim.fs.relpath(root, path)
+  return rel ~= nil
+end
+
+local function build_policy_from_opts()
+  local workspace_root = vim.fs.normalize(vim.uv.cwd())
+  local vetted_roots = {}
+  local seen = {}
+
+  for _, entry in ipairs(current_opts.external_allowlist or {}) do
+    local normalized, err = normalize_allowlist_path(entry, workspace_root)
+    if not normalized then
+      log:warn("Rejected agentskills.external_allowlist entry '%s': %s", tostring(entry), err)
+    elseif current_opts.enforce_workspace_boundary and not is_path_within_root(normalized, workspace_root) then
+      log:warn(
+        "Rejected agentskills.external_allowlist entry '%s': outside workspace root '%s'",
+        normalized,
+        workspace_root
+      )
+    else
+      local canonical = vim.uv.fs_realpath(normalized) or normalized
+      if current_opts.enforce_workspace_boundary and not is_path_within_root(canonical, workspace_root) then
+        log:warn(
+          "Rejected agentskills.external_allowlist entry '%s': real path escapes workspace root '%s'",
+          canonical,
+          workspace_root
+        )
+      elseif not seen[canonical] then
+        seen[canonical] = true
+        table.insert(vetted_roots, canonical)
+      end
+    end
+  end
+
+  current_policy = {
+    workspace_root = workspace_root,
+    external_roots = vetted_roots,
+    enforce_workspace_boundary = current_opts.enforce_workspace_boundary,
+    allow_direct_commands = current_opts.allow_direct_commands,
+  }
+
+  current_opts.external_allowlist = vim.deepcopy(vetted_roots)
+end
+
+
 
 local function discover_skills()
   skills = {}
@@ -116,6 +188,7 @@ function Extension.setup(opts)
     current_opts.external_allowlist = {}
   end
 
+
   if current_opts.enforce_workspace_boundary == nil then
     current_opts.enforce_workspace_boundary = true
   else
@@ -127,6 +200,9 @@ function Extension.setup(opts)
   else
     current_opts.allow_direct_commands = not not current_opts.allow_direct_commands
   end
+
+  build_policy_from_opts()
+
 
 
   -- Detect CodeCompanion version
@@ -168,17 +244,20 @@ function Extension.setup(opts)
 end
 
 ---@return {
+--- workspace_root: string,
 --- external_allowlist: string[],
 --- enforce_workspace_boundary: boolean,
 --- allow_direct_commands: boolean
 ---}
 function Extension.get_policy()
   return {
-    external_allowlist = vim.deepcopy(current_opts.external_allowlist),
-    enforce_workspace_boundary = current_opts.enforce_workspace_boundary,
-    allow_direct_commands = current_opts.allow_direct_commands,
+    workspace_root = current_policy.workspace_root,
+    external_allowlist = vim.deepcopy(current_policy.external_roots),
+    enforce_workspace_boundary = current_policy.enforce_workspace_boundary,
+    allow_direct_commands = current_policy.allow_direct_commands,
   }
 end
+
 
 ---@return table<string, CodeCompanion.AgentSkills.Skill>?
 function Extension.get_skills()

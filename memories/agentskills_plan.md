@@ -40,15 +40,17 @@ Confirmed decisions
 Locked decision
 - Workspace root source: `vim.uv.cwd()`.
 
-Implementation outline
-- Step 1 (implemented):
-  - Added opts to AgentSkills setup:
-    - external_allowlist = { "relative/or/absolute/path" }
-    - enforce_workspace_boundary = true (default true)
-    - allow_direct_commands = true (BMAD compatibility)
-  - Added option normalization/coercion in setup.
-  - Added `Extension.get_policy()` and exported it.
-  - No runtime path resolver/execution changes yet.
-- Step 2 (next):
-  - Validate/normalize allowlist against workspace boundary (`vim.uv.cwd()`).
-  - Store only vetted roots for later resolver use.
+Implementation progress
+- Step 1 completed:
+  - Added policy opts in setup/defaults.
+  - Added `Extension.get_policy()` export.
+- Step 2 completed:
+  - Added policy builder with allowlist normalization/validation against workspace.
+  - Canonicalizes with `fs_realpath` when possible.
+  - Rejects entries escaping workspace (including symlink escape).
+  - De-duplicates vetted roots.
+  - `get_policy()` now returns `workspace_root` + vetted allowlist.
+  - Fixed regression: restored local `skills` declaration.
+
+Next step (Step 3)
+- Wire policy into `skill.lua` path resolution and keep runtime behavior backward-compatible before introducing run_script mode split.
