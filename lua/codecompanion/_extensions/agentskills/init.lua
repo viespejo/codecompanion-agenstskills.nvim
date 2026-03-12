@@ -202,6 +202,8 @@ function Extension.setup(opts)
   end
 
   build_policy_from_opts()
+  Skill.set_policy(Extension.get_policy())
+
 
 
 

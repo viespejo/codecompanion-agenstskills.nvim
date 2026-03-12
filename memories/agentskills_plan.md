@@ -51,6 +51,15 @@ Implementation progress
   - De-duplicates vetted roots.
   - `get_policy()` now returns `workspace_root` + vetted allowlist.
   - Fixed regression: restored local `skills` declaration.
+- Step 3 completed:
+  - Added `Skill.set_policy()` and module-level `active_policy` in skill.lua.
+  - Replaced strict skill-only resolver with policy-aware resolver:
+    - allows `self.path` and vetted `external_allowlist` roots.
+    - checks symlink escapes via realpath containment.
+    - provides access-kind aware errors/logging.
+  - Applied resolver to `read_file` and path-based `run_script` entry.
+  - Wired setup to propagate policy: `Skill.set_policy(Extension.get_policy())`.
 
-Next step (Step 3)
-- Wire policy into `skill.lua` path resolution and keep runtime behavior backward-compatible before introducing run_script mode split.
+Next step (Step 4)
+- Implement run_script mode split for BMAD compatibility:
+  - path mode (current resolver) vs direct command mode (approved execution path).
