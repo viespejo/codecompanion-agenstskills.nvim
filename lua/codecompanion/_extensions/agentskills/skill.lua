@@ -31,7 +31,10 @@ end
 ---@field meta table<string, any>
 local Skill = {
   SKILL_DIR_PLACEHOLDER = "${SKILL_DIR}",
+  WORKSPACE_ROOT_PLACEHOLDER = "${WORKSPACE_ROOT}",
+  PROJECT_ROOT_PLACEHOLDER = "{project-root}",
 }
+
 Skill.__index = Skill
 
 ---@type {
@@ -87,8 +90,10 @@ end
 
 function Skill:_normalize_path_in_skill(path_in_skill, access_kind)
   access_kind = access_kind or "resource"
+  path_in_skill = self:_expand_path_placeholders(path_in_skill)
 
   local candidate
+
   if vim.startswith(path_in_skill, "/") then
     candidate = vim.fs.normalize(path_in_skill)
   else
@@ -127,16 +132,29 @@ local function has_path_separator(s)
   return type(s) == "string" and string.find(s, "/", 1, true) ~= nil
 end
 
-function Skill:_expand_skill_dir_placeholder(value)
+function Skill:_expand_path_placeholders(value)
   if type(value) ~= "string" then
     return value
   end
-  local placeholder_pattern = vim.pesc(self.SKILL_DIR_PLACEHOLDER)
-  return string.gsub(value, placeholder_pattern, self.path)
+
+  local replacements = {
+    [self.SKILL_DIR_PLACEHOLDER] = self.path,
+    [self.WORKSPACE_ROOT_PLACEHOLDER] = active_policy.workspace_root,
+    [self.PROJECT_ROOT_PLACEHOLDER] = active_policy.workspace_root,
+    ["${PROJECT_ROOT}"] = active_policy.workspace_root,
+  }
+
+  local expanded = value
+  for placeholder, replacement in pairs(replacements) do
+    expanded = string.gsub(expanded, vim.pesc(placeholder), replacement)
+  end
+
+  return expanded
 end
 
 function Skill:_resolve_run_target(script)
-  local expanded_script = self:_expand_skill_dir_placeholder(script)
+  local expanded_script = self:_expand_path_placeholders(script)
+
 
   -- Support script files at skill root without slash (e.g. "run.sh")
   if not vim.startswith(expanded_script, "/") and not has_path_separator(expanded_script) then
@@ -223,8 +241,9 @@ function Skill:run_script(script, args, callback)
 
   local expanded_args = {}
   for _, arg in ipairs(args or {}) do
-    table.insert(expanded_args, self:_expand_skill_dir_placeholder(arg))
+    table.insert(expanded_args, self:_expand_path_placeholders(arg))
   end
+
 
   local cmd
   if mode == "direct" then

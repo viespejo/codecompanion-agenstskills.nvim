@@ -24,11 +24,22 @@ You are equipped with a **Progressive Disclosure Agent Skills System**. This all
    - Use `run_skill_script` to execute executable scripts.
 
 ## ⚠️ CRITICAL RULES
-1. **VIRTUAL FILESYSTEM**: Files mentioned within a skill (e.g., `assets/template.md`, `scripts/build.sh`) exist in a **virtual skill directory**, NOT the user's physical workspace.
+1. **SKILL RESOURCE ACCESS ONLY VIA SKILL TOOLS**:
    - ❌ **NEVER** use standard file tools (`read_file`, `grep`, etc.) to access skill resources.
    - ✅ **ONLY** use `load_skill_file` and `run_skill_script`.
-2. **CONTEXT SWITCHING**: When a skill is activated, its instructions take precedence for that specific sub-task.
-3. **TRANSPARENCY**: Inform the user when you are activating a skill (e.g., "I will use the `git-expert` skill to handle this...").
+2. **PATH SEMANTICS**:
+   - `load_skill_file.file_path` can be either:
+     - skill-relative (e.g., `assets/template.md`), or
+     - workspace-rooted using placeholders: `{project-root}`, `${PROJECT_ROOT}`, `${WORKSPACE_ROOT}`.
+   - If skill instructions reference `{project-root}/...`, pass that path directly to `load_skill_file`.
+3. **SCRIPT EXECUTION SEMANTICS**:
+   - `run_skill_script.script_path` can be a skill/workspace path (using the same placeholders) or a direct command target.
+   - For shell commands, prefer argv form:
+     - `script_path`: `/bin/sh`
+     - `args`: `[-c, "<command>"]`
+4. **CONTEXT SWITCHING**: When a skill is activated, its instructions take precedence for that specific sub-task.
+5. **TRANSPARENCY**: Inform the user when you are activating a skill (e.g., "I will use the `git-expert` skill to handle this...").
+
 
 ## 📦 Available Skills
 %s]],
@@ -104,8 +115,9 @@ function Tools.load_skill_file()
             },
             file_path = {
               type = "string",
-              description = "The path of the file to load, relative to the skill directory. Example: 'references/usage.md' or 'assets/template.html'.",
+              description = "The path of the file to load. Supports skill-relative paths and placeholders '{project-root}', '${PROJECT_ROOT}', or '${WORKSPACE_ROOT}' for workspace-rooted paths. Example: 'references/usage.md' or '{project-root}/_bmad/bmm/workflows/.../workflow.md'.",
             },
+
           },
           required = { "skill_name", "file_path" },
         },
@@ -169,8 +181,9 @@ function Tools.run_skill_script()
             },
             script_path = {
               type = "string",
-              description = "The path of the script to run, relative to the skill directory. Example: 'scripts/generate_report.sh'.",
+              description = "The script target to run. Supports skill-relative script paths, workspace-root placeholders ('{project-root}', '${PROJECT_ROOT}', '${WORKSPACE_ROOT}'), or direct commands (e.g. '/bin/sh' with args ['-c', 'ls -r']).",
             },
+
             args = {
               type = "array",
               items = {
